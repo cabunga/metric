@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const app = express();
 const port = 3001;
+const bodyParser = require('body-parser');
 
 app.use(bodyParser.json());
 
@@ -46,18 +47,26 @@ async function buscarDatoEnLogs(logs) {
     reject('No se encontraron ambos tags en los logs' + logs);
   });
 }
+app.post('/setWorkflowNameAndURL', (req, res) => {
+  const { WORKFLOW_NAME, URL_PART,GITHUB_TOKEN } = req.body;
+  app.set('WORKFLOW_NAME', WORKFLOW_NAME);
+  app.set('URL_PART', URL_PART);
+  app.set('GITHUB_TOKEN', GITHUB_TOKEN);
+  res.json({ message: 'Notificacion recibida' });
+});
 
 app.get('/getTags', async (req, res) => {
   try {
-    const GITHUB_TOKEN = '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';
-    const WORKFLOW_NAME = 'Deploy Payment DOM';
+    const GITHUB_TOKEN =  app.get('GITHUB_TOKEN') || '';
+    const WORKFLOW_NAME = app.get('WORKFLOW_NAME') || 'Deploy Payment DOM';
+    const URL_PART = app.get('URL_PART') || 'Pipelines-dom';
 
     let datoBuscado = '';
     var jobStatus = 'demo';
     let ultimaEjecucion='';
     let workflowInfoArray = [];
     // Obtener información sobre las ejecuciones de los workflows
-    const workflowsResponse = await axios.get('https://api.github.com/repos/clarovideo-argentina/Pipelines-dom/actions/runs', {
+    const workflowsResponse = await axios.get(`${URL_PART}/actions/runs`, {            
       headers: {
         Authorization: `Bearer ${GITHUB_TOKEN}`,
       },
@@ -71,7 +80,7 @@ app.get('/getTags', async (req, res) => {
       jobStatus = `Se encontró el ID del workflow ${WORKFLOW_NAME}: ${workflow.id}`;
 
       // Obtener información sobre la última ejecución del workflow
-      const jobsResponse = await axios.get(`https://api.github.com/repos/clarovideo-argentina/Pipelines-dom/actions/runs/${workflow.id}/jobs?page=2`, {
+      const jobsResponse = await axios.get(`${URL_PART}/actions/runs/${workflow.id}/jobs?page=2`, {
         headers: {
           Authorization: `Bearer ${GITHUB_TOKEN}`,
         },
@@ -85,7 +94,7 @@ app.get('/getTags', async (req, res) => {
         jobStatus = `STATUS: ${ultimaEjecucion.status}`;
 
         // Obtener logs de la última ejecución
-        const logsResponse = await axios.get(`https://api.github.com/repos/clarovideo-argentina/Pipelines-dom/actions/jobs/${ultimaEjecucion.id}/logs`, {
+        const logsResponse = await axios.get(`${URL_PART}/actions/jobs/${ultimaEjecucion.id}/logs`, {
           headers: {
             Authorization: `Bearer ${GITHUB_TOKEN}`,
           },
@@ -93,7 +102,7 @@ app.get('/getTags', async (req, res) => {
 
         datoBuscado = logsResponse.data;
         datoBuscado = await buscarDatoEnLogs(datoBuscado);
-        console.log("--------" + jobStatus);
+        
       } else {
         console.log('No se pudo obtener información sobre la última ejecución del workflow.');
       }
@@ -104,7 +113,7 @@ app.get('/getTags', async (req, res) => {
     console.log('envia' + JSON.stringify(datoBuscado));
     const workflowInfo = new WorkflowInfo(ultimaEjecucion, datoBuscado.tag, datoBuscado.IMGTAG);
     workflowInfoArray.push(workflowInfo);
-    //const result = await buscarDatoEnLogs(datoBuscado);
+    
     const result =  JSON.stringify(jobStatus);
     res.json(workflowInfoArray);
   } catch (error) {
